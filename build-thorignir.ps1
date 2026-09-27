@@ -72,6 +72,16 @@ if ($pj -notmatch '#undef GetMessage') {
 Write-Host "  OK: macro GetMessage desactivado"
 Require-Path (Join-Path $src "CMakeLists.txt") "CMakeLists.txt de Thorignir"
 
+Write-Host "[2.7/8] Forzando C++17 + PCH..."
+$rootCmake = Join-Path $src "CMakeLists.txt"
+$cm = Get-Content -LiteralPath $rootCmake -Raw
+if ($cm -notmatch 'CMAKE_CXX_STANDARD 17') {
+    $cm = "set(CMAKE_CXX_STANDARD 17)`r`nset(CMAKE_CXX_STANDARD_REQUIRED ON)`r`nset(CMAKE_CXX_EXTENSIONS OFF)`r`n" + $cm
+    Set-Content -LiteralPath $rootCmake -Value $cm -Encoding UTF8
+}
+Write-Host "  OK: C++17 activado"
+Write-Host "  OK: PCH activado"
+
 # ------------------------------------------------------------
 # EXACTAMENTE la rama de dependencias que pide este source.
 # AppVeyor mantiene Boost 1.64 y MySQL 5.7 en sus imÃ¡genes.
@@ -155,8 +165,8 @@ $configureArgs = @(
     "-DSERVERS=ON",
     "-DSCRIPTS=ON",
     "-DTOOLS=OFF",
-    "-DUSE_COREPCH=OFF",
-    "-DUSE_SCRIPTPCH=OFF",
+    "-DUSE_COREPCH=ON",
+    "-DUSE_SCRIPTPCH=ON",
     "-DWITHOUT_GIT=ON",
     "-DWITH_SOURCE_TREE=no"
 )
@@ -224,6 +234,7 @@ Write-Host " OK - THORIGNIR COMPILADO" -ForegroundColor Green
 Write-Host " Artifact: $artifact" -ForegroundColor Green
 Write-Host " Tamano:   $sizeMb MB" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
+
 
 
 
