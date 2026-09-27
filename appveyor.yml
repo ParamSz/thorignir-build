@@ -1,0 +1,12 @@
+version: 1.0.{build}
+image: Visual Studio 2019
+clone_depth: 1
+
+build_script:
+  - ps: .\build-thorignir.ps1
+
+test: off
+
+artifacts:
+  - path: Thorignir-26972-Windows-x64.zip
+    name: Thorignir-26972-Windows-x64
