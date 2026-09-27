@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = Continue"
 Set-StrictMode -Version Latest
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -30,7 +30,7 @@ $build = Join-Path $work "build"
 $install = Join-Path $work "server"
 
 Write-Host "============================================================"
-Write-Host " THORIGNIR 7.3.5 26972 - COMPILADOR MSVC 2019"
+Write-Host " THORIGNIR 7.3.5 26972 - COMPILADOR MSVC 2017"
 Write-Host "============================================================"
 Write-Host "[1/8] Limpiando area temporal..."
 if (Test-Path $work) { Remove-Item $work -Recurse -Force }
@@ -108,7 +108,7 @@ Write-Host ""
 New-Item -ItemType Directory -Path $build -Force | Out-Null
 New-Item -ItemType Directory -Path $install -Force | Out-Null
 
-Write-Host "[5/8] Generando Visual Studio 2019 x64..."
+Write-Host "[5/8] Generando Visual Studio 2017 x64..."
 $configureArgs = @(
     "-S", $src,
     "-B", $build,
@@ -192,4 +192,5 @@ Write-Host " OK - THORIGNIR COMPILADO" -ForegroundColor Green
 Write-Host " Artifact: $artifact" -ForegroundColor Green
 Write-Host " Tamano:   $sizeMb MB" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
+
 
