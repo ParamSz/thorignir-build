@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Continue"
 Set-StrictMode -Version Latest
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -30,7 +30,7 @@ $build = Join-Path $work "build"
 $install = Join-Path $work "server"
 
 Write-Host "============================================================"
-Write-Host " THORIGNIR 7.3.5 26972 - COMPILADOR MSVC 2019"
+Write-Host " THORIGNIR 7.3.5 26972 - COMPILADOR MSVC 2017"
 Write-Host "============================================================"
 Write-Host "[1/8] Limpiando area temporal..."
 if (Test-Path $work) { Remove-Item $work -Recurse -Force }
@@ -42,7 +42,7 @@ Require-Path (Join-Path $src "CMakeLists.txt") "CMakeLists.txt de Thorignir"
 
 # ------------------------------------------------------------
 # EXACTAMENTE la rama de dependencias que pide este source.
-# AppVeyor mantiene Boost 1.64 y MySQL 5.7 en sus imágenes.
+# AppVeyor mantiene Boost 1.64 y MySQL 5.7 en sus imÃ¡genes.
 # ------------------------------------------------------------
 $boostRoot = "C:\Libraries\boost_1_64_0"
 $boostLib = Join-Path $boostRoot "lib64-msvc-14.1"
@@ -108,11 +108,11 @@ Write-Host ""
 New-Item -ItemType Directory -Path $build -Force | Out-Null
 New-Item -ItemType Directory -Path $install -Force | Out-Null
 
-Write-Host "[5/8] Generando Visual Studio 2019 x64..."
+Write-Host "[5/8] Generando Visual Studio 2017 x64..."
 $configureArgs = @(
     "-S", $src,
     "-B", $build,
-    "-G", "Visual Studio 16 2019",
+    "-G", "Visual Studio 15 2017",
     "-A", "x64",
     "-DCMAKE_INSTALL_PREFIX=$install",
     "-DBOOST_ROOT=$boostRoot",
@@ -132,7 +132,7 @@ $configureArgs = @(
 & $cmakeExe @configureArgs
 if ($LASTEXITCODE -ne 0) { Fail "CMake configure fallo con codigo $LASTEXITCODE" }
 
-Write-Host "[6/8] Compilando Thorignir con MSVC 2019..."
+Write-Host "[6/8] Compilando Thorignir con MSVC 2017..."
 & $cmakeExe --build $build --config Release --target INSTALL -- /m:2
 if ($LASTEXITCODE -ne 0) { Fail "MSVC build fallo con codigo $LASTEXITCODE" }
 
@@ -166,7 +166,7 @@ foreach ($dll in $sslDlls) {
 $info = @"
 Thorignir Legion V3 7.3.5 build 26972
 Compilado en AppVeyor
-Toolchain: Visual Studio 2019 x64
+Toolchain: Visual Studio 2017 x64 / MSVC 14.16
 Boost: 1.64.0 / lib64-msvc-14.1
 CMake: 3.16.4
 OpenSSL: 1.1.1 x64
@@ -192,3 +192,4 @@ Write-Host " OK - THORIGNIR COMPILADO" -ForegroundColor Green
 Write-Host " Artifact: $artifact" -ForegroundColor Green
 Write-Host " Tamano:   $sizeMb MB" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
+
