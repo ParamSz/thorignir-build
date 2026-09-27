@@ -1,5 +1,5 @@
-version: 1.0.{build}
-image: Visual Studio 2019
+﻿version: 1.0.{build}
+image: Visual Studio 2017
 clone_depth: 1
 
 build_script:
@@ -10,3 +10,4 @@ test: off
 artifacts:
   - path: Thorignir-26972-Windows-x64.zip
     name: Thorignir-26972-Windows-x64
+

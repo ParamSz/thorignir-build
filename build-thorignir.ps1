@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -42,7 +42,7 @@ Require-Path (Join-Path $src "CMakeLists.txt") "CMakeLists.txt de Thorignir"
 
 # ------------------------------------------------------------
 # EXACTAMENTE la rama de dependencias que pide este source.
-# AppVeyor mantiene Boost 1.64 y MySQL 5.7 en sus imágenes.
+# AppVeyor mantiene Boost 1.64 y MySQL 5.7 en sus imÃ¡genes.
 # ------------------------------------------------------------
 $boostRoot = "C:\Libraries\boost_1_64_0"
 $boostLib = Join-Path $boostRoot "lib64-msvc-14.1"
@@ -112,7 +112,7 @@ Write-Host "[5/8] Generando Visual Studio 2019 x64..."
 $configureArgs = @(
     "-S", $src,
     "-B", $build,
-    "-G", "Visual Studio 16 2019",
+    "-G", "Visual Studio 15 2017",
     "-A", "x64",
     "-DCMAKE_INSTALL_PREFIX=$install",
     "-DBOOST_ROOT=$boostRoot",
@@ -192,3 +192,4 @@ Write-Host " OK - THORIGNIR COMPILADO" -ForegroundColor Green
 Write-Host " Artifact: $artifact" -ForegroundColor Green
 Write-Host " Tamano:   $sizeMb MB" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
+
