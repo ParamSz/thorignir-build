@@ -51,6 +51,25 @@ if ($t -notmatch '#include <functional>') {
 }
 
 Write-Host "  OK: FunctionProcessor parcheado"
+Write-Host "[2.6/8] Aplicando parche Windows GetMessage..."
+$protobufJson = Join-Path $src "src\server\shared\JSON\ProtobufJSON.cpp"
+
+if (-not (Test-Path -LiteralPath $protobufJson)) {
+    throw "No encuentro ProtobufJSON.cpp"
+}
+
+$pj = Get-Content -LiteralPath $protobufJson -Raw
+
+if ($pj -notmatch '#undef GetMessage') {
+    $pj = $pj.Replace(
+        '#include <stack>',
+        "#include <stack>`r`n`r`n#ifdef GetMessage`r`n#undef GetMessage`r`n#endif"
+    )
+
+    Set-Content -LiteralPath $protobufJson -Value $pj -Encoding UTF8
+}
+
+Write-Host "  OK: macro GetMessage desactivado"
 Require-Path (Join-Path $src "CMakeLists.txt") "CMakeLists.txt de Thorignir"
 
 # ------------------------------------------------------------
@@ -205,5 +224,6 @@ Write-Host " OK - THORIGNIR COMPILADO" -ForegroundColor Green
 Write-Host " Artifact: $artifact" -ForegroundColor Green
 Write-Host " Tamano:   $sizeMb MB" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
+
 
 
