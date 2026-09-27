@@ -31,7 +31,7 @@ $build = Join-Path $work "build"
 $install = Join-Path $work "server"
 
 Write-Host "============================================================"
-Write-Host " THORIGNIR 7.3.5 26972 - COMPILADOR MSVC 2019"
+Write-Host " THORIGNIR 7.3.5 26972 - COMPILADOR MSVC AUTO"
 Write-Host "============================================================"
 Write-Host "[1/8] Limpiando area temporal..."
 if (Test-Path $work) { Remove-Item $work -Recurse -Force }
@@ -158,12 +158,31 @@ Write-Host ""
 New-Item -ItemType Directory -Path $build -Force | Out-Null
 New-Item -ItemType Directory -Path $install -Force | Out-Null
 
-Write-Host "[5/8] Generando Visual Studio 2019 x64..."
+Write-Host "[5/8] Detectando Visual Studio compatible..."
+
+# Este source ya avanzo correctamente con MSVC 2017.
+# Preferimos VS2017 porque Boost 1.64 de AppVeyor trae lib64-msvc-14.1.
+$vs2017 = "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community"
+$vs2019 = "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community"
+
+if (Test-Path $vs2017) {
+    $generator = "Visual Studio 15 2017 Win64"
+    $generatorArgs = @("-G", $generator)
+    Write-Host "  OK: usando Visual Studio 2017 x64 (MSVC 14.1)"
+}
+elseif (Test-Path $vs2019) {
+    $generator = "Visual Studio 16 2019"
+    $generatorArgs = @("-G", $generator, "-A", "x64")
+    Write-Host "  OK: usando Visual Studio 2019 x64"
+}
+else {
+    Fail "No encontre Visual Studio 2017 ni 2019 en AppVeyor."
+}
+
 $configureArgs = @(
     "-S", $src,
-    "-B", $build,
-    "-G", "Visual Studio 16 2019",
-    "-A", "x64",
+    "-B", $build
+) + $generatorArgs + @(
     "-DCMAKE_INSTALL_PREFIX=$install",
     "-DBOOST_ROOT=$boostRoot",
     "-DBOOST_LIBRARYDIR=$boostLib",
@@ -179,12 +198,31 @@ $configureArgs = @(
     "-DWITH_SOURCE_TREE=no"
 )
 
-& $cmakeExe @configureArgs
-if ($LASTEXITCODE -ne 0) { Fail "CMake configure fallo con codigo $LASTEXITCODE" }
+# AppVeyor/Windows PowerShell convierte a veces stderr de CMake en
+# NativeCommandError aunque CMake siga bien. No abortamos por stderr:
+# comprobamos solamente el EXIT CODE real.
+$oldPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+& $cmakeExe @configureArgs 2>&1 | ForEach-Object { Write-Host $_ }
+$cmakeCode = $LASTEXITCODE
+$ErrorActionPreference = $oldPreference
 
-Write-Host "[6/8] Compilando Thorignir con MSVC 2019..."
-& $cmakeExe --build $build --config Release --target INSTALL -- /m:2
-if ($LASTEXITCODE -ne 0) { Fail "MSVC build fallo con codigo $LASTEXITCODE" }
+if ($cmakeCode -ne 0) {
+    Fail "CMake configure fallo con codigo $cmakeCode"
+}
+
+Write-Host "[6/8] Compilando Thorignir con $generator..."
+Write-Host "  Paralelismo: TODOS los cores disponibles (/m)"
+
+$oldPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+& $cmakeExe --build $build --config Release --target INSTALL -- /m 2>&1 | ForEach-Object { Write-Host $_ }
+$buildCode = $LASTEXITCODE
+$ErrorActionPreference = $oldPreference
+
+if ($buildCode -ne 0) {
+    Fail "MSVC build fallo con codigo $buildCode"
+}
 
 Write-Host "[7/8] Verificando binarios y copiando DLL runtime..."
 $world = Get-ChildItem -Path $install -Filter "worldserver.exe" -Recurse -File | Select-Object -First 1
