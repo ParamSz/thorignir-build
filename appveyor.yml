@@ -1,20 +1,68 @@
-version: 1.0.{build}
+﻿version: 1.0.{build}
 image: Visual Studio 2017
 clone_depth: 1
 
-environment:
-  APPVEYOR_SAVE_CACHE_ON_ERROR: true
-
-cache:
-  - C:\thorignir-26972\build
-
 build_script:
-  - ps: .\build-thorignir.ps1
+  - ps: |
+      $ErrorActionPreference = "Stop"
+
+      Write-Host "==============================================="
+      Write-Host " THORIGNIR - EXTRAER DLL OPENSSL 1.0.2u SOLO"
+      Write-Host "==============================================="
+
+      $root = "C:\OpenSSL-Win64"
+      $out  = Join-Path $env:APPVEYOR_BUILD_FOLDER "thorignir-openssl-dlls"
+      $zip  = Join-Path $env:APPVEYOR_BUILD_FOLDER "Thorignir-OpenSSL-1.0.2u-DLLs.zip"
+
+      if (-not (Test-Path $root)) {
+          throw "No existe $root"
+      }
+
+      New-Item -ItemType Directory -Path $out -Force | Out-Null
+
+      foreach ($name in @("SSLEAY32.dll", "LIBEAY32.dll")) {
+          Write-Host "Buscando $name..."
+          $dll = Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue |
+                 Where-Object { $_.Name -ieq $name } |
+                 Select-Object -First 1
+
+          if (-not $dll) {
+              Write-Host "Contenido DLL encontrado en OpenSSL:"
+              Get-ChildItem -Path $root -Recurse -File -Filter "*.dll" -ErrorAction SilentlyContinue |
+                  Select-Object FullName
+              throw "No encontre $name"
+          }
+
+          Copy-Item $dll.FullName (Join-Path $out $name) -Force
+          Write-Host "OK: $($dll.FullName)"
+      }
+
+      if (Test-Path $zip) { Remove-Item $zip -Force }
+
+      Compress-Archive -Path "$out\SSLEAY32.dll","$out\LIBEAY32.dll" `
+                       -DestinationPath $zip `
+                       -CompressionLevel Optimal
+
+      if (-not (Test-Path $zip)) {
+          throw "No se creo el ZIP."
+      }
+
+      Write-Host ""
+      Write-Host "ZIP CREADO:"
+      Get-Item $zip | Format-List FullName,Length
+
+      # Publicacion explicita a AppVeyor
+      Push-AppveyorArtifact $zip -FileName "Thorignir-OpenSSL-1.0.2u-DLLs.zip"
+
+      Write-Host ""
+      Write-Host "==============================================="
+      Write-Host " OK - VE A ARTIFACTS"
+      Write-Host " Thorignir-OpenSSL-1.0.2u-DLLs.zip"
+      Write-Host "==============================================="
 
 test: off
+deploy: off
 
 artifacts:
-  - path: Thorignir-26972-Windows-x64.zip
-    name: Thorignir-26972-Windows-x64
-  - path: thorignir-build-last.log
-    name: Thorignir compile log
+  - path: Thorignir-OpenSSL-1.0.2u-DLLs.zip
+    name: Thorignir-OpenSSL-1.0.2u-DLLs
