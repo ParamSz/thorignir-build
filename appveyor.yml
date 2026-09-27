@@ -13,47 +13,75 @@ build_script:
       $ErrorActionPreference = "Stop"
 
       Write-Host "=================================================="
-      Write-Host " THORIGNIR - GENERAR MAP DEL WORLDSERVER"
-      Write-Host " SIN RECOMPILAR TODO"
+      Write-Host " THORIGNIR - MAP FIX V2"
+      Write-Host " RECREAR SOURCE + CMAKE Y RELINKEAR"
       Write-Host "=================================================="
 
-      $build = "C:\thorignir-26972\build"
+      $repo = $env:APPVEYOR_BUILD_FOLDER
+      $work = "C:\thorignir-26972"
+      $src = Join-Path $work "Thorignir-7.3.5-Updated"
+      $build = Join-Path $work "build"
+      $zipSource = Join-Path $repo "Thorignir-7.3.5-Updated.zip"
+
+      if (-not (Test-Path $zipSource)) {
+          throw "Falta Thorignir-7.3.5-Updated.zip en el repo."
+      }
+
+      Write-Host "[1/4] Recreando source exacto..."
+      if (Test-Path $src) { Remove-Item $src -Recurse -Force }
+      Expand-Archive -LiteralPath $zipSource -DestinationPath $work -Force
+
+      if (-not (Test-Path (Join-Path $src "CMakeLists.txt"))) {
+          throw "No aparecio CMakeLists.txt en $src"
+      }
+
+      Write-Host "[2/4] Recreando CMake 3.16.4 exacto..."
+      $cmakeRoot = Join-Path $work "cmake-3.16.4-win64-x64"
+      $cmakeExe = Join-Path $cmakeRoot "bin\cmake.exe"
+      if (-not (Test-Path $cmakeExe)) {
+          $cmakeZip = Join-Path $work "cmake-3.16.4-win64-x64.zip"
+          Invoke-WebRequest -UseBasicParsing `
+            -Uri "https://github.com/Kitware/CMake/releases/download/v3.16.4/cmake-3.16.4-win64-x64.zip" `
+            -OutFile $cmakeZip
+          Expand-Archive -LiteralPath $cmakeZip -DestinationPath $work -Force
+      }
+
+      if (-not (Test-Path $cmakeExe)) {
+          throw "No pude recrear CMake 3.16.4."
+      }
+
+      Write-Host "[3/4] Activando worldserver.map..."
       $proj = Get-ChildItem $build -Recurse -File -Filter "worldserver.vcxproj" -ErrorAction SilentlyContinue |
               Select-Object -First 1
 
       if (-not $proj) {
-          throw "No encontre worldserver.vcxproj en el cache."
+          throw "No encontre worldserver.vcxproj en cache."
       }
 
       Write-Host "Proyecto: $($proj.FullName)"
-
       $text = Get-Content -LiteralPath $proj.FullName -Raw
 
       if ($text -notmatch '<GenerateMapFile>true</GenerateMapFile>') {
-          # Insertar propiedades dentro del primer bloque <Link> de Release x64.
           $pattern = '<Link>\s*'
           $insert = "<Link>`r`n      <GenerateMapFile>true</GenerateMapFile>`r`n      <MapFileName>`$(OutDir)worldserver.map</MapFileName>`r`n      <MapExports>true</MapExports>`r`n      "
           $text2 = [regex]::Replace($text, $pattern, $insert, 1)
-
           if ($text2 -eq $text) {
-              throw "No pude insertar GenerateMapFile en worldserver.vcxproj."
+              throw "No pude insertar GenerateMapFile."
           }
-
           Set-Content -LiteralPath $proj.FullName -Value $text2 -Encoding UTF8
-          Write-Host "MAP activado en worldserver.vcxproj."
-      } else {
-          Write-Host "MAP ya estaba activado."
       }
 
       $msbuild = "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\MSBuild\15.0\Bin\MSBuild.exe"
       if (-not (Test-Path $msbuild)) {
-          $msbuild = (Get-Command msbuild.exe -ErrorAction SilentlyContinue).Source
+          $cmd = Get-Command msbuild.exe -ErrorAction SilentlyContinue
+          if ($cmd) { $msbuild = $cmd.Source }
       }
-      if (-not $msbuild) {
+
+      if (-not (Test-Path $msbuild)) {
           throw "No encontre MSBuild."
       }
 
-      Write-Host "Relink de worldserver..."
+      Write-Host "[4/4] Relinkeando worldserver..."
       & $msbuild $proj.FullName /m /p:Configuration=Release /p:Platform=x64 /t:Build /v:minimal
       if ($LASTEXITCODE -ne 0) {
           throw "MSBuild fallo con codigo $LASTEXITCODE"
@@ -65,30 +93,24 @@ build_script:
              Select-Object -First 1
 
       if (-not $map) {
-          Write-Host "No encontre worldserver.map. Map files existentes:"
-          Get-ChildItem $build -Recurse -File -Filter "*.map" -ErrorAction SilentlyContinue |
-              Select-Object FullName,Length | Format-Table -AutoSize
-          throw "No se genero worldserver.map."
+          throw "MSBuild termino, pero no aparecio worldserver.map."
       }
 
-      Write-Host "MAP: $($map.FullName)"
-      Write-Host "EXE: $($exe.FullName)"
-
-      $out = Join-Path $env:APPVEYOR_BUILD_FOLDER "worldserver-map"
+      $out = Join-Path $repo "worldserver-map"
       New-Item -ItemType Directory -Path $out -Force | Out-Null
       Copy-Item $map.FullName $out -Force
       if ($exe) { Copy-Item $exe.FullName $out -Force }
 
-      $zip = Join-Path $env:APPVEYOR_BUILD_FOLDER "Thorignir-worldserver-MAP.zip"
+      $zip = Join-Path $repo "Thorignir-worldserver-MAP.zip"
       if (Test-Path $zip) { Remove-Item $zip -Force }
       Compress-Archive -Path "$out\*" -DestinationPath $zip -CompressionLevel Optimal
 
       Push-AppveyorArtifact $zip -FileName "Thorignir-worldserver-MAP.zip"
 
       Write-Host ""
-      Write-Host "==============================================="
-      Write-Host " LISTO -> Artifacts -> Thorignir-worldserver-MAP.zip"
-      Write-Host "==============================================="
+      Write-Host "=================================================="
+      Write-Host " OK -> Artifacts -> Thorignir-worldserver-MAP.zip"
+      Write-Host "=================================================="
 
 test: off
 deploy: off
