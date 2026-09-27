@@ -1,4 +1,5 @@
-﻿$ErrorActionPreference = "Continue"
+﻿$ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $false
 Set-StrictMode -Version Latest
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -30,7 +31,7 @@ $build = Join-Path $work "build"
 $install = Join-Path $work "server"
 
 Write-Host "============================================================"
-Write-Host " THORIGNIR 7.3.5 26972 - COMPILADOR MSVC 2017"
+Write-Host " THORIGNIR 7.3.5 26972 - COMPILADOR MSVC 2019"
 Write-Host "============================================================"
 Write-Host "[1/8] Limpiando area temporal..."
 if (Test-Path $work) { Remove-Item $work -Recurse -Force }
@@ -38,53 +39,60 @@ New-Item -ItemType Directory -Path $work | Out-Null
 
 Write-Host "[2/8] Extrayendo SOURCE ORIGINAL, sin parches Linux..."
 Expand-Archive -LiteralPath $sourceZip -DestinationPath $work -Force
-Write-Host "[2.5/8] Aplicando parche FunctionProcessor..."
-$fp = Join-Path $src "src\common\Utilities\FunctionProcessor.h"
-$t = Get-Content -LiteralPath $fp -Raw
-
-if ($t -notmatch '#include <functional>') {
-    $t = $t.Replace(
-        '#include <map>',
-        "#include <map>`r`n#include <functional>`r`n#include <atomic>`r`n#include <mutex>"
-    )
-    Set-Content -LiteralPath $fp -Value $t -Encoding UTF8
-}
-
-Write-Host "  OK: FunctionProcessor parcheado"
-Write-Host "[2.6/8] Aplicando parche Windows GetMessage..."
-$protobufJson = Join-Path $src "src\server\shared\JSON\ProtobufJSON.cpp"
-
-if (-not (Test-Path -LiteralPath $protobufJson)) {
-    throw "No encuentro ProtobufJSON.cpp"
-}
-
-$pj = Get-Content -LiteralPath $protobufJson -Raw
-
-if ($pj -notmatch '#undef GetMessage') {
-    $pj = $pj.Replace(
-        '#include <stack>',
-        "#include <stack>`r`n`r`n#ifdef GetMessage`r`n#undef GetMessage`r`n#endif"
-    )
-
-    Set-Content -LiteralPath $protobufJson -Value $pj -Encoding UTF8
-}
-
-Write-Host "  OK: macro GetMessage desactivado"
 Require-Path (Join-Path $src "CMakeLists.txt") "CMakeLists.txt de Thorignir"
 
-Write-Host "[2.7/8] Forzando C++17 + PCH..."
-$rootCmake = Join-Path $src "CMakeLists.txt"
-$cm = Get-Content -LiteralPath $rootCmake -Raw
-if ($cm -notmatch 'CMAKE_CXX_STANDARD 17') {
-    $cm = "set(CMAKE_CXX_STANDARD 17)`r`nset(CMAKE_CXX_STANDARD_REQUIRED ON)`r`nset(CMAKE_CXX_EXTENSIONS OFF)`r`n" + $cm
-    Set-Content -LiteralPath $rootCmake -Value $cm -Encoding UTF8
+Write-Host "[2.5/8] Aplicando AUTOFIX de compatibilidad MSVC..."
+
+# ------------------------------------------------------------
+# AUTOFIX 1 - FunctionProcessor: faltan headers en este source
+# ------------------------------------------------------------
+$fp = Join-Path $src "src\common\Utilities\FunctionProcessor.h"
+if (Test-Path $fp) {
+    $txt = Get-Content -LiteralPath $fp -Raw
+    if ($txt -notmatch '#include\s*<functional>') {
+        $txt = "#include <functional>`r`n" + $txt
+        Write-Host "  FIX: FunctionProcessor.h -> <functional>"
+    }
+    if ($txt -notmatch '#include\s*<atomic>') {
+        $txt = "#include <atomic>`r`n" + $txt
+        Write-Host "  FIX: FunctionProcessor.h -> <atomic>"
+    }
+    Set-Content -LiteralPath $fp -Value $txt -Encoding Default
 }
-Write-Host "  OK: C++17 activado"
-Write-Host "  OK: PCH activado"
+
+# ------------------------------------------------------------
+# AUTOFIX 2 - WinAPI define GetMessage -> GetMessageA
+# Rompe google::protobuf::Reflection::GetMessage(...)
+# ------------------------------------------------------------
+$pbjson = Join-Path $src "src\server\shared\JSON\ProtobufJSON.cpp"
+if (Test-Path $pbjson) {
+    $txt = Get-Content -LiteralPath $pbjson -Raw
+    if ($txt -notmatch '#undef\s+GetMessage') {
+        $block = @"
+
+#ifdef GetMessage
+#undef GetMessage
+#endif
+"@
+        $inc = '#include <stack>'
+        if ($txt.Contains($inc)) {
+            $txt = $txt.Replace($inc, $inc + $block)
+        } else {
+            $txt = $block + "`r`n" + $txt
+        }
+        Set-Content -LiteralPath $pbjson -Value $txt -Encoding Default
+        Write-Host "  FIX: ProtobufJSON.cpp -> undef GetMessage"
+    } else {
+        Write-Host "  OK: ProtobufJSON.cpp ya parcheado"
+    }
+}
+
+Write-Host "  AUTOFIX terminado."
+
 
 # ------------------------------------------------------------
 # EXACTAMENTE la rama de dependencias que pide este source.
-# AppVeyor mantiene Boost 1.64 y MySQL 5.7 en sus imÃ¡genes.
+# AppVeyor mantiene Boost 1.64 y MySQL 5.7 en sus imágenes.
 # ------------------------------------------------------------
 $boostRoot = "C:\Libraries\boost_1_64_0"
 $boostLib = Join-Path $boostRoot "lib64-msvc-14.1"
@@ -150,11 +158,11 @@ Write-Host ""
 New-Item -ItemType Directory -Path $build -Force | Out-Null
 New-Item -ItemType Directory -Path $install -Force | Out-Null
 
-Write-Host "[5/8] Generando Visual Studio 2017 x64..."
+Write-Host "[5/8] Generando Visual Studio 2019 x64..."
 $configureArgs = @(
     "-S", $src,
     "-B", $build,
-    "-G", "Visual Studio 15 2017",
+    "-G", "Visual Studio 16 2019",
     "-A", "x64",
     "-DCMAKE_INSTALL_PREFIX=$install",
     "-DBOOST_ROOT=$boostRoot",
@@ -165,8 +173,8 @@ $configureArgs = @(
     "-DSERVERS=ON",
     "-DSCRIPTS=ON",
     "-DTOOLS=OFF",
-    "-DUSE_COREPCH=ON",
-    "-DUSE_SCRIPTPCH=ON",
+    "-DUSE_COREPCH=OFF",
+    "-DUSE_SCRIPTPCH=OFF",
     "-DWITHOUT_GIT=ON",
     "-DWITH_SOURCE_TREE=no"
 )
@@ -174,7 +182,7 @@ $configureArgs = @(
 & $cmakeExe @configureArgs
 if ($LASTEXITCODE -ne 0) { Fail "CMake configure fallo con codigo $LASTEXITCODE" }
 
-Write-Host "[6/8] Compilando Thorignir con MSVC 2017..."
+Write-Host "[6/8] Compilando Thorignir con MSVC 2019..."
 & $cmakeExe --build $build --config Release --target INSTALL -- /m:2
 if ($LASTEXITCODE -ne 0) { Fail "MSVC build fallo con codigo $LASTEXITCODE" }
 
@@ -208,7 +216,7 @@ foreach ($dll in $sslDlls) {
 $info = @"
 Thorignir Legion V3 7.3.5 build 26972
 Compilado en AppVeyor
-Toolchain: Visual Studio 2017 x64 / MSVC 14.16
+Toolchain: Visual Studio 2019 x64
 Boost: 1.64.0 / lib64-msvc-14.1
 CMake: 3.16.4
 OpenSSL: 1.1.1 x64
@@ -234,7 +242,4 @@ Write-Host " OK - THORIGNIR COMPILADO" -ForegroundColor Green
 Write-Host " Artifact: $artifact" -ForegroundColor Green
 Write-Host " Tamano:   $sizeMb MB" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
-
-
-
 
