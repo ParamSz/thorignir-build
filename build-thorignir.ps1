@@ -38,6 +38,19 @@ New-Item -ItemType Directory -Path $work | Out-Null
 
 Write-Host "[2/8] Extrayendo SOURCE ORIGINAL, sin parches Linux..."
 Expand-Archive -LiteralPath $sourceZip -DestinationPath $work -Force
+Write-Host "[2.5/8] Aplicando parche FunctionProcessor..."
+$fp = Join-Path $src "src\common\Utilities\FunctionProcessor.h"
+$t = Get-Content -LiteralPath $fp -Raw
+
+if ($t -notmatch '#include <functional>') {
+    $t = $t.Replace(
+        '#include <map>',
+        "#include <map>`r`n#include <functional>`r`n#include <atomic>`r`n#include <mutex>"
+    )
+    Set-Content -LiteralPath $fp -Value $t -Encoding UTF8
+}
+
+Write-Host "  OK: FunctionProcessor parcheado"
 Require-Path (Join-Path $src "CMakeLists.txt") "CMakeLists.txt de Thorignir"
 
 # ------------------------------------------------------------
@@ -192,4 +205,5 @@ Write-Host " OK - THORIGNIR COMPILADO" -ForegroundColor Green
 Write-Host " Artifact: $artifact" -ForegroundColor Green
 Write-Host " Tamano:   $sizeMb MB" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
+
 
