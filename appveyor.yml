@@ -2,67 +2,61 @@
 image: Visual Studio 2017
 clone_depth: 1
 
+environment:
+  APPVEYOR_SAVE_CACHE_ON_ERROR: true
+
+cache:
+  - C:\thorignir-26972\build
+
 build_script:
   - ps: |
       $ErrorActionPreference = "Stop"
 
-      Write-Host "==============================================="
-      Write-Host " THORIGNIR - EXTRAER DLL OPENSSL 1.0.2u SOLO"
-      Write-Host "==============================================="
+      Write-Host "=================================================="
+      Write-Host " THORIGNIR - EXTRAER PDB DEL CACHE"
+      Write-Host "=================================================="
 
-      $root = "C:\OpenSSL-Win64"
-      $out  = Join-Path $env:APPVEYOR_BUILD_FOLDER "thorignir-openssl-dlls"
-      $zip  = Join-Path $env:APPVEYOR_BUILD_FOLDER "Thorignir-OpenSSL-1.0.2u-DLLs.zip"
-
-      if (-not (Test-Path $root)) {
-          throw "No existe $root"
-      }
-
+      $build = "C:\thorignir-26972\build"
+      $out = Join-Path $env:APPVEYOR_BUILD_FOLDER "debug-files"
       New-Item -ItemType Directory -Path $out -Force | Out-Null
 
-      foreach ($name in @("SSLEAY32.dll", "LIBEAY32.dll")) {
-          Write-Host "Buscando $name..."
-          $dll = Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue |
-                 Where-Object { $_.Name -ieq $name } |
-                 Select-Object -First 1
+      Write-Host "Buscando worldserver.exe / worldserver.pdb..."
+      $exe = Get-ChildItem $build -Recurse -File -Filter "worldserver.exe" -ErrorAction SilentlyContinue |
+             Select-Object -First 1
+      $pdb = Get-ChildItem $build -Recurse -File -Filter "worldserver.pdb" -ErrorAction SilentlyContinue |
+             Select-Object -First 1
 
-          if (-not $dll) {
-              Write-Host "Contenido DLL encontrado en OpenSSL:"
-              Get-ChildItem -Path $root -Recurse -File -Filter "*.dll" -ErrorAction SilentlyContinue |
-                  Select-Object FullName
-              throw "No encontre $name"
-          }
-
-          Copy-Item $dll.FullName (Join-Path $out $name) -Force
-          Write-Host "OK: $($dll.FullName)"
+      if ($exe) {
+          Copy-Item $exe.FullName $out -Force
+          Write-Host "EXE: $($exe.FullName)"
+      } else {
+          Write-Host "No encontre worldserver.exe en cache."
       }
 
+      if ($pdb) {
+          Copy-Item $pdb.FullName $out -Force
+          Write-Host "PDB: $($pdb.FullName)"
+      } else {
+          Write-Host ""
+          Write-Host "PDB no encontrado. Listando PDB existentes:"
+          Get-ChildItem $build -Recurse -File -Filter "*.pdb" -ErrorAction SilentlyContinue |
+              Select-Object FullName,Length |
+              Format-Table -AutoSize
+          throw "No encontre worldserver.pdb en cache."
+      }
+
+      $zip = Join-Path $env:APPVEYOR_BUILD_FOLDER "Thorignir-worldserver-debug.zip"
       if (Test-Path $zip) { Remove-Item $zip -Force }
 
-      Compress-Archive -Path "$out\SSLEAY32.dll","$out\LIBEAY32.dll" `
-                       -DestinationPath $zip `
-                       -CompressionLevel Optimal
-
-      if (-not (Test-Path $zip)) {
-          throw "No se creo el ZIP."
-      }
+      Compress-Archive -Path "$out\*" -DestinationPath $zip -CompressionLevel Optimal
+      Push-AppveyorArtifact $zip -FileName "Thorignir-worldserver-debug.zip"
 
       Write-Host ""
-      Write-Host "ZIP CREADO:"
-      Get-Item $zip | Format-List FullName,Length
-
-      # Publicacion explicita a AppVeyor
-      Push-AppveyorArtifact $zip -FileName "Thorignir-OpenSSL-1.0.2u-DLLs.zip"
-
-      Write-Host ""
-      Write-Host "==============================================="
-      Write-Host " OK - VE A ARTIFACTS"
-      Write-Host " Thorignir-OpenSSL-1.0.2u-DLLs.zip"
-      Write-Host "==============================================="
+      Write-Host "LISTO -> Artifacts -> Thorignir-worldserver-debug.zip"
 
 test: off
 deploy: off
 
 artifacts:
-  - path: Thorignir-OpenSSL-1.0.2u-DLLs.zip
-    name: Thorignir-OpenSSL-1.0.2u-DLLs
+  - path: Thorignir-worldserver-debug.zip
+    name: Thorignir worldserver debug
