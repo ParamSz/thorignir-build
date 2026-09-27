@@ -1,6 +1,12 @@
-﻿version: 1.0.{build}
+version: 1.0.{build}
 image: Visual Studio 2017
 clone_depth: 1
+
+environment:
+  APPVEYOR_SAVE_CACHE_ON_ERROR: true
+
+cache:
+  - C:\thorignir-26972\build
 
 build_script:
   - ps: .\build-thorignir.ps1
@@ -10,4 +16,5 @@ test: off
 artifacts:
   - path: Thorignir-26972-Windows-x64.zip
     name: Thorignir-26972-Windows-x64
-
+  - path: thorignir-build-last.log
+    name: Thorignir compile log
