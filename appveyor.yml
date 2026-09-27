@@ -13,50 +13,86 @@ build_script:
       $ErrorActionPreference = "Stop"
 
       Write-Host "=================================================="
-      Write-Host " THORIGNIR - EXTRAER PDB DEL CACHE"
+      Write-Host " THORIGNIR - GENERAR MAP DEL WORLDSERVER"
+      Write-Host " SIN RECOMPILAR TODO"
       Write-Host "=================================================="
 
       $build = "C:\thorignir-26972\build"
-      $out = Join-Path $env:APPVEYOR_BUILD_FOLDER "debug-files"
-      New-Item -ItemType Directory -Path $out -Force | Out-Null
+      $proj = Get-ChildItem $build -Recurse -File -Filter "worldserver.vcxproj" -ErrorAction SilentlyContinue |
+              Select-Object -First 1
 
-      Write-Host "Buscando worldserver.exe / worldserver.pdb..."
+      if (-not $proj) {
+          throw "No encontre worldserver.vcxproj en el cache."
+      }
+
+      Write-Host "Proyecto: $($proj.FullName)"
+
+      $text = Get-Content -LiteralPath $proj.FullName -Raw
+
+      if ($text -notmatch '<GenerateMapFile>true</GenerateMapFile>') {
+          # Insertar propiedades dentro del primer bloque <Link> de Release x64.
+          $pattern = '<Link>\s*'
+          $insert = "<Link>`r`n      <GenerateMapFile>true</GenerateMapFile>`r`n      <MapFileName>`$(OutDir)worldserver.map</MapFileName>`r`n      <MapExports>true</MapExports>`r`n      "
+          $text2 = [regex]::Replace($text, $pattern, $insert, 1)
+
+          if ($text2 -eq $text) {
+              throw "No pude insertar GenerateMapFile en worldserver.vcxproj."
+          }
+
+          Set-Content -LiteralPath $proj.FullName -Value $text2 -Encoding UTF8
+          Write-Host "MAP activado en worldserver.vcxproj."
+      } else {
+          Write-Host "MAP ya estaba activado."
+      }
+
+      $msbuild = "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\MSBuild\15.0\Bin\MSBuild.exe"
+      if (-not (Test-Path $msbuild)) {
+          $msbuild = (Get-Command msbuild.exe -ErrorAction SilentlyContinue).Source
+      }
+      if (-not $msbuild) {
+          throw "No encontre MSBuild."
+      }
+
+      Write-Host "Relink de worldserver..."
+      & $msbuild $proj.FullName /m /p:Configuration=Release /p:Platform=x64 /t:Build /v:minimal
+      if ($LASTEXITCODE -ne 0) {
+          throw "MSBuild fallo con codigo $LASTEXITCODE"
+      }
+
+      $map = Get-ChildItem $build -Recurse -File -Filter "worldserver.map" -ErrorAction SilentlyContinue |
+             Select-Object -First 1
       $exe = Get-ChildItem $build -Recurse -File -Filter "worldserver.exe" -ErrorAction SilentlyContinue |
              Select-Object -First 1
-      $pdb = Get-ChildItem $build -Recurse -File -Filter "worldserver.pdb" -ErrorAction SilentlyContinue |
-             Select-Object -First 1
 
-      if ($exe) {
-          Copy-Item $exe.FullName $out -Force
-          Write-Host "EXE: $($exe.FullName)"
-      } else {
-          Write-Host "No encontre worldserver.exe en cache."
+      if (-not $map) {
+          Write-Host "No encontre worldserver.map. Map files existentes:"
+          Get-ChildItem $build -Recurse -File -Filter "*.map" -ErrorAction SilentlyContinue |
+              Select-Object FullName,Length | Format-Table -AutoSize
+          throw "No se genero worldserver.map."
       }
 
-      if ($pdb) {
-          Copy-Item $pdb.FullName $out -Force
-          Write-Host "PDB: $($pdb.FullName)"
-      } else {
-          Write-Host ""
-          Write-Host "PDB no encontrado. Listando PDB existentes:"
-          Get-ChildItem $build -Recurse -File -Filter "*.pdb" -ErrorAction SilentlyContinue |
-              Select-Object FullName,Length |
-              Format-Table -AutoSize
-          throw "No encontre worldserver.pdb en cache."
-      }
+      Write-Host "MAP: $($map.FullName)"
+      Write-Host "EXE: $($exe.FullName)"
 
-      $zip = Join-Path $env:APPVEYOR_BUILD_FOLDER "Thorignir-worldserver-debug.zip"
+      $out = Join-Path $env:APPVEYOR_BUILD_FOLDER "worldserver-map"
+      New-Item -ItemType Directory -Path $out -Force | Out-Null
+      Copy-Item $map.FullName $out -Force
+      if ($exe) { Copy-Item $exe.FullName $out -Force }
+
+      $zip = Join-Path $env:APPVEYOR_BUILD_FOLDER "Thorignir-worldserver-MAP.zip"
       if (Test-Path $zip) { Remove-Item $zip -Force }
-
       Compress-Archive -Path "$out\*" -DestinationPath $zip -CompressionLevel Optimal
-      Push-AppveyorArtifact $zip -FileName "Thorignir-worldserver-debug.zip"
+
+      Push-AppveyorArtifact $zip -FileName "Thorignir-worldserver-MAP.zip"
 
       Write-Host ""
-      Write-Host "LISTO -> Artifacts -> Thorignir-worldserver-debug.zip"
+      Write-Host "==============================================="
+      Write-Host " LISTO -> Artifacts -> Thorignir-worldserver-MAP.zip"
+      Write-Host "==============================================="
 
 test: off
 deploy: off
 
 artifacts:
-  - path: Thorignir-worldserver-debug.zip
-    name: Thorignir worldserver debug
+  - path: Thorignir-worldserver-MAP.zip
+    name: Thorignir worldserver MAP
