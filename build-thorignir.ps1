@@ -332,6 +332,19 @@ foreach ($dll in $sslDlls) {
     Write-Host "  DLL: $($dll.Name)"
 }
 
+# Thorignir termina enlazando contra OpenSSL 1.0.2u de AppVeyor.
+# worldserver.exe importa exactamente SSLEAY32.dll y LIBEAY32.dll.
+$legacyOpenSsl = "C:\OpenSSL-Win64"
+foreach ($dllName in @("SSLEAY32.dll", "LIBEAY32.dll")) {
+    $dll = Get-ChildItem -Path $legacyOpenSsl -Filter $dllName -Recurse -File -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if (-not $dll) {
+        Fail "Falta runtime OpenSSL requerido: $dllName"
+    }
+    Copy-Item $dll.FullName $binDir -Force
+    Write-Host "  DLL legacy requerida: $($dll.Name)"
+}
+
 $info = @"
 Thorignir Legion 7.3.5 build 26972
 Source base: Thorignir-7.3.5-Updated.zip
@@ -371,3 +384,4 @@ Write-Host " OK - THORIGNIR 26972 COMPILADO" -ForegroundColor Green
 Write-Host " worldserver.exe + bnetserver.exe generados" -ForegroundColor Green
 Write-Host " Artifact: Thorignir-26972-Windows-x64.zip ($sizeMb MB)" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
+
